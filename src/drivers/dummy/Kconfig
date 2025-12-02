@@ -1,0 +1,5 @@
+menuconfig DRIVERS_DUMMY
+	bool "Dummy"
+	default n
+	---help---
+		Enable support for Dummy driver with libcanard CAN messaging
