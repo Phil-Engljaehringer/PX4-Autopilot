@@ -80,7 +80,7 @@ private:
 	void unpackFwFromROMFS(const char *sd_path, const char *romfs_path);
 	void migrateFWFromRoot(const char *sd_path, const char *sd_root_path);
 	int copyFw(const char *dst, const char *src);
-	void updateFwDatabase(const char *db_path,const char *fw_path, const char *original_filename);
+	void updateFwDatabase(const char *db_path, const char *fw_path, const char *original_filename);
 	void validateFwDatabase(const char *db_path);
 
 	uavcan_posix::dynamic_node_id_server::FileEventTracer _tracer;
