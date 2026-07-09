@@ -57,8 +57,6 @@
 #include <uavcan_posix/firmware_version_checker.hpp>
 
 static constexpr size_t FW_DB_LINE_SIZE = 256; // key(~15) + '=' + filename(NAME_MAX) + '\n'
-static const char FW_DB_PATH[] = UAVCAN_FIRMWARE_PATH "/FW.db";
-static const char FW_DB_TMP_PATH[] = UAVCAN_FIRMWARE_PATH "/FW.db.tmp";
 static uint8_t _buffer[512]
 px4_cache_aligned_data() = {};
 
@@ -143,7 +141,7 @@ int UavcanServers::init()
 	}
 
 	/* Check if all entries in the firmware database are still valid */
-	validateFwDatabase();
+	validateFwDatabase(UAVCAN_FIRMWARE_PATH "/fw.db");
 
 	/*
 	Check for firmware in the root directory, move it to appropriate location on
@@ -165,11 +163,15 @@ void UavcanServers::check_nfs()
 	nfs_up_s nfs_up{};
 
 	if (_nfs_up_sub.update(&nfs_up)) {
+		validateFwDatabase(UAVCAN_NFS_PATH "/fw.db");
+		migrateFWFromRoot(UAVCAN_NFS_PATH, UAVCAN_NFS_STAGING_PATH);
 		_fw_version_checker.setFirmwareNfsBasePath(UAVCAN_NFS_PATH);
 		_fileserver_backend.setNfsRootPath(UAVCAN_NFS_PATH);
 		_node_info_retriever.invalidateAll();
 	}
 }
+
+
 
 void UavcanServers::migrateFWFromRoot(const char *sd_path, const char *sd_root_path)
 {
@@ -234,7 +236,7 @@ void UavcanServers::migrateFWFromRoot(const char *sd_path, const char *sd_root_p
 	for (int i = 0; i < bin_count; i++) {
 		uavcan_posix::FirmwareVersionChecker::AppDescriptor descriptor{0};
 
-		snprintf(srcpath, sizeof(srcpath), "%s%s", sd_root_path, bin_names[i]);
+		snprintf(srcpath, sizeof(srcpath), "%s/%s", sd_root_path, bin_names[i]);
 
 		if (uavcan_posix::FirmwareVersionChecker::getFileInfo(srcpath, descriptor, 1024) != 0) {
 			continue;
@@ -246,8 +248,12 @@ void UavcanServers::migrateFWFromRoot(const char *sd_path, const char *sd_root_p
 
 		snprintf(dstpath, sizeof(dstpath), "%s/%d.bin", sd_path, descriptor.board_id);
 
+		if (strcmp(srcpath, dstpath) == 0) {
+			continue;
+		}
+
 		if (copyFw(dstpath, srcpath) >= 0) {
-			updateFwDatabase(dstpath, bin_names[i]);
+			updateFwDatabase(sd_path, dstpath, bin_names[i]);
 			unlink(srcpath);
 		}
 	}
@@ -257,7 +263,7 @@ int UavcanServers::copyFw(const char *dst, const char *src)
 {
 	int rv = 0;
 
-	int dfd = open(dst, O_WRONLY | O_CREAT, 0666);
+	int dfd = open(dst, O_WRONLY | O_CREAT | O_TRUNC, 0666);
 
 	if (dfd < 0) {
 		PX4_ERR("copyFw: couldn't open dst");
@@ -308,7 +314,7 @@ int UavcanServers::copyFw(const char *dst, const char *src)
 	return rv;
 }
 
-void UavcanServers::updateFwDatabase(const char *fw_path, const char *original_filename)
+void UavcanServers::updateFwDatabase(const char *sd_path, const char *fw_path, const char *original_filename)
 {
 	// DB key is the filename portion of fw_path, e.g. "12345.bin"
 	const char *last_slash = strrchr(fw_path, '/');
@@ -318,9 +324,15 @@ void UavcanServers::updateFwDatabase(const char *fw_path, const char *original_f
 	char new_entry[FW_DB_LINE_SIZE];
 	snprintf(new_entry, sizeof(new_entry), "%s=%s\n", new_filename, original_filename);
 
+	char db_path[UAVCAN_MAX_PATH_LENGTH + 1];
+	char tmp_db_path[UAVCAN_MAX_PATH_LENGTH + 1];
+
+	snprintf(db_path, sizeof(db_path), "%s/fw.db", sd_path);
+	snprintf(tmp_db_path, sizeof(tmp_db_path), "%s/fw.db.tmp", sd_path);
+
 	// Open the existing DB for reading (may not exist yet) and a temp file for writing.
-	FILE *db_in  = fopen(FW_DB_PATH, "r");
-	FILE *db_out = fopen(FW_DB_TMP_PATH, "w");
+	FILE *db_in  = fopen(db_path, "r");
+	FILE *db_out = fopen(tmp_db_path, "w");
 
 	if (!db_out) {
 		if (db_in) { fclose(db_in); }
@@ -356,19 +368,26 @@ void UavcanServers::updateFwDatabase(const char *fw_path, const char *original_f
 	fsync(fileno(db_out));
 	fclose(db_out);
 
-	// Atomically replace the old DB with the updated version.
-	rename(FW_DB_TMP_PATH, FW_DB_PATH);
+	(void)unlink(db_path);
+
+	if (rename(tmp_db_path, db_path) != 0) {
+		PX4_ERR("updateFwDatabase: rename %s -> %s failed, errno %d", tmp_db_path, db_path, errno);
+		(void)unlink(tmp_db_path);
+	}
+
 }
 
-void UavcanServers::validateFwDatabase()
+void UavcanServers::validateFwDatabase(const char *db_path)
 {
-	FILE *db_in = fopen(FW_DB_PATH, "r");
+	FILE *db_in = fopen(db_path, "r");
 
 	if (!db_in) {
 		return; // no DB yet, nothing to validate
 	}
 
-	FILE *db_out = fopen(FW_DB_TMP_PATH, "w");
+	char tmp_db_path[UAVCAN_MAX_PATH_LENGTH + 5];
+	snprintf(tmp_db_path, sizeof(tmp_db_path), "%s.tmp", db_path);
+	FILE *db_out = fopen(tmp_db_path, "w");
 
 	if (!db_out) {
 		fclose(db_in);
@@ -410,9 +429,14 @@ void UavcanServers::validateFwDatabase()
 	fclose(db_out);
 
 	if (changed) {
-		rename(FW_DB_TMP_PATH, FW_DB_PATH);
+		(void)unlink(db_path);
+
+		if (rename(tmp_db_path, db_path) != 0) {
+			PX4_ERR("validateFwDatabase: rename failed, errno %d", errno);
+			(void)unlink(tmp_db_path);
+		}
 
 	} else {
-		unlink(FW_DB_TMP_PATH);
+		unlink(tmp_db_path);
 	}
 }
