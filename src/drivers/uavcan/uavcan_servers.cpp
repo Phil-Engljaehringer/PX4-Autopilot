@@ -158,6 +158,7 @@ int UavcanServers::init()
 	return 0;
 }
 
+#ifdef CONFIG_MODULES_NFS_MOUNT
 void UavcanServers::check_nfs()
 {
 	nfs_up_s nfs_up{};
@@ -170,6 +171,7 @@ void UavcanServers::check_nfs()
 		_node_info_retriever.invalidateAll();
 	}
 }
+#endif
 
 void UavcanServers::migrateFWFromRoot(const char *sd_path, const char *sd_root_path)
 {
