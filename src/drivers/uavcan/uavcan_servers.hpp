@@ -81,7 +81,7 @@ private:
 	void migrateFWFromRoot(const char *sd_path, const char *sd_root_path);
 	int copyFw(const char *dst, const char *src);
 	void updateFwDatabase(const char *db_path, const char *fw_path, const char *original_filename);
-	void validateFwDatabase(const char *db_path);
+	void validateFwDatabase(const char *ufw_dir_path);
 
 	uavcan_posix::dynamic_node_id_server::FileEventTracer _tracer;
 	uavcan_posix::dynamic_node_id_server::FileStorageBackend _storage_backend;

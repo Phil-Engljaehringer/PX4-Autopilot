@@ -141,7 +141,7 @@ int UavcanServers::init()
 	}
 
 	/* Check if all entries in the firmware database are still valid */
-	validateFwDatabase(UAVCAN_FIRMWARE_PATH "/fw.db");
+	validateFwDatabase(UAVCAN_FIRMWARE_PATH);
 
 	/*
 	Check for firmware in the root directory, move it to appropriate location on
@@ -163,7 +163,7 @@ void UavcanServers::check_nfs()
 	nfs_up_s nfs_up{};
 
 	if (_nfs_up_sub.update(&nfs_up)) {
-		validateFwDatabase(UAVCAN_NFS_PATH "/fw.db");
+		validateFwDatabase(UAVCAN_NFS_PATH);
 		migrateFWFromRoot(UAVCAN_NFS_PATH, UAVCAN_NFS_STAGING_PATH);
 		_fw_version_checker.setFirmwareNfsBasePath(UAVCAN_NFS_PATH);
 		_fileserver_backend.setNfsRootPath(UAVCAN_NFS_PATH);
@@ -371,18 +371,20 @@ void UavcanServers::updateFwDatabase(const char *ufw_dir_path, const char *fw_pa
 
 }
 
-void UavcanServers::validateFwDatabase(const char *db_path)
+void UavcanServers::validateFwDatabase(const char *ufw_dir_path)
 {
-	FILE *db_in = fopen(db_path, "r");
+	char db_path[UAVCAN_MAX_PATH_LENGTH + 1];
+	char tmp_db_path[UAVCAN_MAX_PATH_LENGTH + 5];
 
+	snprintf(db_path, sizeof(db_path), "%s/fw.db", ufw_dir_path);
+	snprintf(tmp_db_path, sizeof(tmp_db_path), "%s.tmp", db_path);
+
+	FILE *db_in = fopen(db_path, "r");
 	if (!db_in) {
 		return; // no DB yet, nothing to validate
 	}
 
-	char tmp_db_path[UAVCAN_MAX_PATH_LENGTH + 5];
-	snprintf(tmp_db_path, sizeof(tmp_db_path), "%s.tmp", db_path);
 	FILE *db_out = fopen(tmp_db_path, "w");
-
 	if (!db_out) {
 		fclose(db_in);
 		PX4_WARN("validateFwDatabase: couldn't open tmp file");
@@ -403,7 +405,7 @@ void UavcanServers::validateFwDatabase(const char *db_path)
 
 		// Build the full path to the firmware file to check if it still exists.
 		char full_path[UAVCAN_MAX_PATH_LENGTH + 1];
-		snprintf(full_path, sizeof(full_path), "%s/%.*s", UAVCAN_FIRMWARE_PATH,
+		snprintf(full_path, sizeof(full_path), "%s/%.*s", ufw_dir_path,
 			 (int)(eq - line), line);
 
 		struct stat sb;
