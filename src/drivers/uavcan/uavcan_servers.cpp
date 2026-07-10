@@ -382,11 +382,13 @@ void UavcanServers::validateFwDatabase(const char *ufw_dir_path)
 	snprintf(tmp_db_path, sizeof(tmp_db_path), "%s.tmp", db_path);
 
 	FILE *db_in = fopen(db_path, "r");
+
 	if (!db_in) {
 		return; // no DB yet, nothing to validate
 	}
 
 	FILE *db_out = fopen(tmp_db_path, "w");
+
 	if (!db_out) {
 		fclose(db_in);
 		PX4_WARN("validateFwDatabase: couldn't open tmp file");
