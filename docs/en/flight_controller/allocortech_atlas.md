@@ -27,8 +27,8 @@ This flight controller is [manufacturer supported](../flight_controller/autopilo
 - [Bosch BMI088](https://www.bosch-sensortec.com/products/motion-sensors/imus/bmi088/) accelerometer/gyroscope (SPI3)
 - [InvenSense ICM-42688-P](https://invensense.tdk.com/products/motion-tracking/6-axis/icm-42688-p/) IMU (SPI2)
 - [InvenSense IIM-42652](https://invensense.tdk.com/products/motion-tracking/6-axis/iim-42652/) IMU (SPI4)
-- [Bosch BMP388](https://www.bosch-sensortec.com/products/environmental-sensors/pressure-sensors/bmp388/) barometer (I2C)
 - [Bosch BMM350](https://www.bosch-sensortec.com/products/motion-sensors/magnetometers/bmm350/) magnetometer (I2C, bus 4, address `0x14`)
+- Amphenol [AUAV-L30D](https://www.allsensors.com/hubfs/Product-Data-Sheets/DS-432.pdf) barometer and differential pressure sensor (on the internal Wasp DroneCAN node)
 
 All three IMUs are on separate SPI buses for sensor redundancy.
 
